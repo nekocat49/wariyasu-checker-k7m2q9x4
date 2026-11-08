@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>割安チェッカー</title>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#fff; --text:#1d2330; --muted:#6b7385; --line:#e3e6ec;
+  --accent:#2563eb; --accent-soft:#e7efff; --good:#0f8a5f; --good-soft:#e3f5ec;
+  --warn:#b45309; --warn-soft:#fdf1e1; --bad:#c2410c; --dot-off:#d5d9e1;
+  --row-hit:#f1fbf5;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#12151b; --panel:#1b1f27; --text:#e6e9ef; --muted:#98a1b3; --line:#2c323d;
+    --accent:#6b9cff; --accent-soft:#1f2b45; --good:#3ecf8e; --good-soft:#15342a;
+    --warn:#f0a44b; --warn-soft:#3a2a16; --bad:#ff8a5b; --dot-off:#3a404c;
+    --row-hit:#16261f;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif}
+.wrap{max-width:1380px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+h1{font-size:22px;margin:0;letter-spacing:.02em}
+.sub{color:var(--muted);font-size:12px}
+.spacer{flex:1}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:8px;padding:6px 12px}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.small{padding:3px 8px;font-size:12px}
+input,select{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+input[type=range]{padding:0;accent-color:var(--accent)}
+.grid{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:14px}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.card h2{font-size:14px;margin:0 0 10px;color:var(--muted);font-weight:600}
+.sig-row{display:grid;grid-template-columns:22px 150px 1fr;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.sig-row:last-child{border-bottom:0}
+.sig-row label{font-weight:600}
+.ctrl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ctrl .val{font-weight:700;min-width:48px;font-variant-numeric:tabular-nums}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chip{padding:2px 9px;border-radius:999px;font-size:12px}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.num{width:70px}
+.wl-add{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.wl-add input{flex:1;min-width:90px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow:auto}
+.tag{display:inline-flex;align-items:center;gap:4px;background:var(--accent-soft);border-radius:999px;padding:2px 4px 2px 10px;font-size:12px}
+.tag b{font-weight:600}
+.tag button{border:0;background:transparent;padding:0 6px;color:var(--muted);font-size:14px;line-height:1}
+.tag button:hover{color:var(--bad)}
+.wl-tools{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 10px}
+.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 14px;min-width:120px}
+.kpi .k{font-size:11px;color:var(--muted)}
+.kpi .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.tbl-wrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:1180px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+th{font-size:11px;color:var(--muted);font-weight:600;background:var(--panel);position:sticky;top:0}
+th.l,td.l{text-align:left}
+tr.main{cursor:pointer}
+tr.main:hover td{background:var(--accent-soft)}
+tr.hit td{background:var(--row-hit)}
+.dots{letter-spacing:2px;font-size:13px}
+.dot{color:var(--dot-off)} .dot.on{color:var(--good)}
+.score{font-size:11px;color:var(--muted);margin-left:4px}
+.nm{font-weight:600}
+.code{color:var(--muted);font-size:12px;margin-right:4px}
+.meta{color:var(--muted);font-size:11px}
+.ok{color:var(--good);font-weight:700}
+.ng{color:var(--muted)}
+.up{color:#d03b3b} .down{color:#2a7ad8}
+.pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;margin-left:2px}
+.pill.hit{background:var(--good-soft);color:var(--good)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.stale{background:var(--warn-soft);color:var(--warn)}
+.dist{font-size:11px;color:var(--muted)}
+.dist.reached{color:var(--good);font-weight:700}
+tr.detail td{background:var(--bg);text-align:left;white-space:normal;padding:14px}
+.detail-grid{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+@media (max-width:900px){.detail-grid{grid-template-columns:1fr}}
+.chart{width:100%;height:auto;display:block}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap;margin-top:4px}
+.legend i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:4px}
+.links a{color:var(--accent);margin-right:12px;text-decoration:none}
+.links a:hover{text-decoration:underline}
+.memo-in{width:100%;margin-top:6px}
+.muted{color:var(--muted)}
+.loading{padding:30px;text-align:center;color:var(--muted)}
+.note{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.7}
+.err{color:var(--bad);font-size:12px}
+
+/* 公開版（閲覧専用）では編集系を隠す */
+body.static .wl-add, body.static .wl-tools{display:none}
+
+/* ===== スマホ：表をカード表示に ===== */
+@media (max-width:760px){
+  .wrap{padding:14px 12px 40px}
+  h1{font-size:19px}
+  .card{padding:12px}
+  .sig-row{grid-template-columns:22px 1fr;row-gap:4px}
+  .sig-row .ctrl{grid-column:1 / -1;padding-left:30px}
+  .sig-row > span:first-child{display:none}
+  .sig-row:last-child{grid-template-columns:1fr}
+  .sig-row:last-child .ctrl{padding-left:0}
+  input[type=range]{flex:1;min-width:120px}
+  .kpi{flex:1 1 40%;min-width:0}
+  .kpi .v{font-size:18px}
+  .tbl-wrap{background:transparent;border:0;overflow:visible}
+  table{min-width:0}
+  thead{display:none}
+  table, tbody{display:block}
+  tr.main{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px}
+  tr.main td{display:block;border:0;padding:0;text-align:left;white-space:normal;background:transparent !important}
+  tr.main td:nth-child(1){grid-column:1 / -1;order:2}
+  tr.main td:nth-child(2){grid-column:1 / -1;order:1}
+  tr.main td:nth-child(n+3){order:3}
+  tr.main td[data-label]::before{content:attr(data-label);display:block;font-size:10px;color:var(--muted)}
+  tr.main td.warn-cell{grid-column:1 / -1;order:4}
+  tr.main td.warn-cell:empty{display:none}
+  tr.hit{border-color:var(--good) !important;background:var(--row-hit) !important}
+  tr.detail{display:block;margin:-6px 0 12px}
+  tr.detail td{display:block;border:1px solid var(--line);border-radius:12px;padding:10px}
+  tr:not(.main):not(.detail){display:block}
+  tr:not(.main):not(.detail) td{display:block}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>📉 割安チェッカー</h1>
+  <span class="sub" id="updated"></span>
+  <span class="spacer"></span>
+  <button id="btnRefresh" class="primary">最新データに更新</button>
+</header>
+
+<div class="grid">
+  <!-- 判定条件 -->
+  <section class="card">
+    <h2>判定条件（チェックしたものがシグナル●になります）</h2>
+
+    <div class="sig-row">
+      <input type="checkbox" id="useDrop">
+      <label for="useDrop">高値からの下落</label>
+      <div class="ctrl">
+        <select id="dropPeriod">
+          <option value="21">直近1ヶ月</option>
+          <option value="63">直近3ヶ月</option>
+          <option value="126">直近6ヶ月</option>
+          <option value="252">52週（1年）</option>
+          <option value="756">3年</option>
+          <option value="1260">5年</option>
+        </select>
+        の高値から
+        <input type="range" id="dropPct" min="3" max="60" step="1">
+        <span class="val" id="dropPctV"></span>以上下落
+        <div class="chips" id="dropChips"></div>
+      </div>
+    </div>
+
+    <div class="sig-row">
+      <input type="checkbox" id="useYield">
+      <label for="useYield">目標利回り以上</label>
+      <div class="ctrl">
+        予想利回り ≥
+        <input type="range" id="targetYield" min="2" max="7" step="0.1">
+        <span class="val" id="targetYieldV"></span>
+      </div>
+    </div>
+
+    <div class="sig-row">
+      <input type="checkbox" id="useAvg">
+      <label for="useAvg">5年平均より高利回り</label>
+      <div class="ctrl">予想利回り &gt; 過去5年の平均利回り ＋
+        <input type="number" id="avgMargin" class="num" step="0.1" min="0"> pt</div>
+    </div>
+
+    <div class="sig-row">
+      <input type="checkbox" id="usePer">
+      <label for="usePer">PER</label>
+      <div class="ctrl"><input type="number" id="perMax" class="num" step="0.5" min="1"> 倍以下
+        <select id="perType"><option value="per">実績PER</option><option value="fper">予想PER</option></select></div>
+    </div>
+
+    <div class="sig-row">
+      <input type="checkbox" id="usePbr">
+      <label for="usePbr">PBR</label>
+      <div class="ctrl"><input type="number" id="pbrMax" class="num" step="0.1" min="0.1"> 倍以下</div>
+    </div>
+
+    <div class="sig-row">
+      <span></span>
+      <label>割安候補の基準</label>
+      <div class="ctrl">シグナル <select id="minHits"></select> 個以上で「割安候補」</div>
+    </div>
+  </section>
+
+  <!-- 銘柄リスト -->
+  <section class="card">
+    <h2>銘柄リスト（<span id="wlCount">0</span>銘柄）</h2>
+    <div class="wl-add">
+      <input id="addCode" placeholder="証券コード 例: 8306 / 130A / AAPL" autocomplete="off">
+      <input id="addMemo" placeholder="メモ（任意）">
+      <button id="btnAdd" class="primary">追加</button>
+    </div>
+    <div class="sub" style="margin-bottom:6px" id="wlHint">複数まとめて追加：「8306, 8316 9434」のように区切って入力できます</div>
+    <div class="tags" id="tags"></div>
+    <div class="wl-tools">
+      <button class="small" id="btnExport">書き出し（JSON）</button>
+      <button class="small" id="btnImport">読み込み</button>
+      <input type="file" id="fileImport" accept=".json" hidden>
+    </div>
+  </section>
+</div>
+
+<div class="summary" id="summary"></div>
+
+<div class="toolbar">
+  並べ替え
+  <select id="sortBy">
+    <option value="score">シグナルが多い順</option>
+    <option value="drop">高値からの下落が大きい順</option>
+    <option value="yield">予想利回りが高い順</option>
+    <option value="avgGap">5年平均との差が大きい順</option>
+    <option value="buyDist">買いたい株価に近い順</option>
+    <option value="code">証券コード順</option>
+  </select>
+  業種 <select id="sector"><option value="">すべて</option></select>
+  <label><input type="checkbox" id="onlyHit"> 割安候補だけ表示</label>
+</div>
+
+<div class="tbl-wrap">
+<table>
+  <thead><tr>
+    <th class="l">シグナル</th>
+    <th class="l">銘柄</th>
+    <th>株価</th>
+    <th>高値から</th>
+    <th>予想利回り</th>
+    <th>5年平均</th>
+    <th>PER</th>
+    <th>PBR</th>
+    <th>下落ライン株価</th>
+    <th>買いたい株価</th>
+    <th class="l">注意</th>
+  </tr></thead>
+  <tbody id="tbody"><tr><td colspan="11" class="loading">読み込み中…</td></tr></tbody>
+</table>
+</div>
+
+<p class="note">
+・データは Yahoo Finance（yfinance）から取得し、30分間はキャッシュします。取得に失敗した銘柄は前回の値を表示します（「前回値」マーク）。<br>
+・予想配当は Yahoo の配当予想（dividendRate）を使用。5年平均利回りは「過去5年の各月末株価 ÷ その時点の直近12ヶ月配当」の平均です（参考サイトの期ベース計算とは少しずれます）。<br>
+・買いたい株価 ＝ 予想配当 ÷ 目標利回り。下落ライン株価 ＝ 基準期間の高値 ×（1 − 下落率）。<br>
+・⚠ 減配予想：予想配当が直近12ヶ月の実績を下回る ／ 配当性向70%以上。非減配年数は暦年合計で判定しています。<br>
+・投資判断はご自身で。数値は必ず IR BANK や会社資料でも確認してください。
+</p>
+</div>
+
+<script>
+// ===================== 設定 =====================
+const DEFAULTS = {
+  useDrop:true, dropPeriod:"252", dropPct:20,
+  useYield:true, targetYield:4.0,
+  useAvg:true, avgMargin:0,
+  usePer:true, perMax:15, perType:"per",
+  usePbr:true, pbrMax:1.0,
+  minHits:3, sortBy:"score", sector:"", onlyHit:false,
+};
+let S = {...DEFAULTS};
+try { Object.assign(S, JSON.parse(localStorage.getItem("wariyasu-settings")||"{}")); } catch(e){}
+const saveS = () => { try{ localStorage.setItem("wariyasu-settings", JSON.stringify(S)); }catch(e){} };
+
+const $ = id => document.getElementById(id);
+const PERIOD_LABEL = {"21":"1ヶ月","63":"3ヶ月","126":"6ヶ月","252":"52週","756":"3年","1260":"5年"};
+
+let watchlist = [];
+const data = {};          // code -> stock data
+let STATIC = false;       // true = サーバーなし（data.json を読むだけの公開版）
+let generatedAt = "";
+const open = new Set();   // 展開中の行
+
+// ===================== UI 初期化 =====================
+function bindSettings(){
+  const bools = ["useDrop","useYield","useAvg","usePer","usePbr","onlyHit"];
+  const vals  = ["dropPeriod","dropPct","targetYield","avgMargin","perMax","perType","pbrMax","sortBy","sector","minHits"];
+  bools.forEach(k => { $(k).checked = !!S[k]; $(k).onchange = () => { S[k] = $(k).checked; changed(); }; });
+  vals.forEach(k => {
+    const el = $(k);
+    if (k !== "sector" && k !== "minHits") el.value = S[k];
+    el.oninput = () => {
+      const num = ["dropPct","targetYield","avgMargin","perMax","pbrMax","minHits"].includes(k);
+      S[k] = num ? parseFloat(el.value) : el.value;
+      changed();
+    };
+  });
+  const chips = $("dropChips");
+  [10,15,20,25,30,40].forEach(p => {
+    const b = document.createElement("button");
+    b.className = "chip small"; b.textContent = p + "%"; b.dataset.p = p;
+    b.onclick = () => { S.dropPct = p; $("dropPct").value = p; changed(); };
+    chips.appendChild(b);
+  });
+}
+function refreshMinHits(){
+  const n = ["useDrop","useYield","useAvg","usePer","usePbr"].filter(k=>S[k]).length || 1;
+  const sel = $("minHits");
+  sel.innerHTML = "";
+  for (let i=1;i<=n;i++){ const o=document.createElement("option"); o.value=i; o.textContent=i; sel.appendChild(o); }
+  if (S.minHits > n) S.minHits = n;
+  sel.value = S.minHits;
+}
+function changed(){
+  saveS();
+  $("dropPctV").textContent = S.dropPct + "%";
+  $("targetYieldV").textContent = Number(S.targetYield).toFixed(1) + "%";
+  document.querySelectorAll("#dropChips .chip").forEach(b => b.classList.toggle("on", +b.dataset.p === +S.dropPct));
+  refreshMinHits();
+  render();
+}
+
+// ===================== 銘柄リスト =====================
+async function loadWatchlist(){
+  watchlist = await (await fetch("/api/watchlist")).json();
+  renderTags();
+}
+async function saveWatchlist(){
+  watchlist = await (await fetch("/api/watchlist", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(watchlist)})).json();
+  renderTags();
+}
+function renderTags(){
+  $("wlCount").textContent = watchlist.length;
+  const t = $("tags"); t.innerHTML = "";
+  watchlist.forEach(w => {
+    const d = data[w.code];
+    const span = document.createElement("span");
+    span.className = "tag";
+    span.innerHTML = `<b>${esc(w.code)}</b>${d && d.name ? " " + esc(short(d.name)) : ""}${STATIC ? "&nbsp;" : '<button title="削除">×</button>'}`;
+    if (!STATIC) span.querySelector("button").onclick = async () => {
+      if (!confirm(`${w.code} ${d&&d.name?d.name:""} をリストから外しますか？`)) return;
+      watchlist = watchlist.filter(x => x.code !== w.code);
+      delete data[w.code];
+      await saveWatchlist(); render();
+    };
+    t.appendChild(span);
+  });
+}
+async function addCodes(){
+  const raw = $("addCode").value.trim();
+  if (!raw) return;
+  const memo = $("addMemo").value.trim();
+  const codes = raw.toUpperCase().split(/[\s,、，]+/).filter(Boolean);
+  const added = [];
+  codes.forEach(c => {
+    if (!watchlist.some(w => w.code === c)) { watchlist.push({code:c, memo}); added.push(c); }
+  });
+  $("addCode").value = ""; $("addMemo").value = "";
+  await saveWatchlist();
+  render();
+  await fetchAll(added);
+}
+
+// ===================== データ取得 =====================
+async function fetchOne(code, force){
+  try {
+    const r = await fetch(`/api/stock?code=${encodeURIComponent(code)}${force?"&force=1":""}`);
+    data[code] = await r.json();
+  } catch(e){ data[code] = {code, error:"サーバーに接続できません"}; }
+  render(); renderTags();
+}
+async function fetchAll(codes, force=false){
+  const q = [...codes];
+  const worker = async () => { while(q.length){ await fetchOne(q.shift(), force); } };
+  await Promise.all(Array.from({length:4}, worker));
+  const times = Object.values(data).map(d=>d.fetchedAt).filter(Boolean).sort();
+  if (times.length) $("updated").textContent = "データ取得: " + times[times.length-1];
+}
+
+// ===================== 計算 =====================
+function calc(d){
+  if (!d || d.error && !d.price) return null;
+  const n = +S.dropPeriod;
+  const ser = d.series || [];
+  const win = ser.slice(-n);
+  let high = null, highDate = null;
+  win.forEach(([dt, c, h]) => { if (high === null || h > high) { high = h; highDate = dt; } });
+  const price = d.price;
+  const drop = high ? (1 - price / high) * 100 : null;
+  const dropLine = high ? high * (1 - S.dropPct/100) : null;
+  const yld = d.fwdDiv && price ? d.fwdDiv / price * 100 : null;
+  const buyPrice = d.fwdDiv ? d.fwdDiv / (S.targetYield/100) : null;
+  const perV = S.perType === "fper" ? d.fper : d.per;
+
+  const sig = {
+    drop:  drop !== null && drop >= S.dropPct,
+    yield: yld !== null && yld >= S.targetYield,
+    avg:   yld !== null && d.avg5Yield != null && yld > d.avg5Yield + (+S.avgMargin||0),
+    per:   perV != null && perV > 0 && perV <= S.perMax,
+    pbr:   d.pbr != null && d.pbr > 0 && d.pbr <= S.pbrMax,
+  };
+  const active = {drop:S.useDrop, yield:S.useYield, avg:S.useAvg, per:S.usePer, pbr:S.usePbr};
+  const keys = Object.keys(sig).filter(k => active[k]);
+  const score = keys.filter(k => sig[k]).length;
+
+  const warns = [];
+  if (d.fwdDiv && d.ttmDiv && d.fwdDiv < d.ttmDiv * 0.98) warns.push("減配予想");
+  if (d.payout != null && d.payout >= 70) warns.push(`配当性向${Math.round(d.payout)}%`);
+  if (!d.fwdDiv) warns.push("無配");
+
+  return {
+    high, highDate, drop, dropLine, yld, buyPrice, perV, sig, keys, score,
+    hit: keys.length > 0 && score >= S.minHits,
+    toDropLine: dropLine ? (price/dropLine - 1) * 100 : null,  // あと何%下がれば到達
+    toBuy: buyPrice ? (price/buyPrice - 1) * 100 : null,
+    avgGap: yld !== null && d.avg5Yield != null ? yld - d.avg5Yield : null,
+    warns,
+  };
+}
+
+// ===================== 描画 =====================
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const short = s => s.length > 12 ? s.slice(0,12) + "…" : s;
+const fmtP = (v, cur) => v == null ? "—" : (cur === "JPY" || !cur ? Math.round(v).toLocaleString() : v.toLocaleString(undefined,{maximumFractionDigits:2}));
+const f1 = v => v == null ? "—" : v.toFixed(1);
+const f2 = v => v == null ? "—" : v.toFixed(2);
+
+function distCell(target, dist, cur){
+  if (target == null) return "—";
+  const reached = dist <= 0;
+  const txt = reached ? "到達済み" : `あと${dist.toFixed(1)}%下落`;
+  return `${fmtP(target, cur)}<br><span class="dist ${reached?"reached":""}">${txt}</span>`;
+}
+
+function render(){
+  const rows = watchlist.map(w => ({w, d:data[w.code], c:calc(data[w.code])}));
+
+  // 業種セレクト
+  const sectors = [...new Set(rows.filter(r=>r.d&&r.d.sector).map(r=>r.d.sector))].sort();
+  const sel = $("sector"), cur = S.sector;
+  sel.innerHTML = '<option value="">すべて</option>' + sectors.map(s=>`<option ${s===cur?"selected":""}>${esc(s)}</option>`).join("");
+
+  // サマリー
+  const ok = rows.filter(r=>r.c);
+  const hits = ok.filter(r=>r.c.hit).length;
+  const dropHits = ok.filter(r=>r.c.sig.drop).length;
+  const buyHits = ok.filter(r=>r.c.toBuy != null && r.c.toBuy <= 0).length;
+  $("summary").innerHTML = `
+    <div class="kpi"><div class="k">登録銘柄</div><div class="v">${watchlist.length}</div></div>
+    <div class="kpi"><div class="k">割安候補（●${S.minHits}個以上）</div><div class="v" style="color:var(--good)">${hits}</div></div>
+    <div class="kpi"><div class="k">${PERIOD_LABEL[S.dropPeriod]}高値から${S.dropPct}%以上下落</div><div class="v">${dropHits}</div></div>
+    <div class="kpi"><div class="k">買いたい株価（利回り${(+S.targetYield).toFixed(1)}%）到達</div><div class="v">${buyHits}</div></div>`;
+
+  // 並べ替え・絞り込み
+  let list = rows.filter(r => {
+    if (S.sector && (!r.d || r.d.sector !== S.sector)) return false;
+    if (S.onlyHit && !(r.c && r.c.hit)) return false;
+    return true;
+  });
+  const key = {
+    score: r => r.c ? r.c.score * 1000 + (r.c.drop||0) : -1e9,
+    drop: r => r.c && r.c.drop != null ? r.c.drop : -1e9,
+    yield: r => r.c && r.c.yld != null ? r.c.yld : -1e9,
+    avgGap: r => r.c && r.c.avgGap != null ? r.c.avgGap : -1e9,
+    buyDist: r => r.c && r.c.toBuy != null ? -r.c.toBuy : -1e9,
+    code: r => 0,
+  }[S.sortBy];
+  if (S.sortBy === "code") list.sort((a,b)=>a.w.code.localeCompare(b.w.code));
+  else list.sort((a,b)=>key(b)-key(a));
+
+  const tb = $("tbody");
+  if (!list.length){ tb.innerHTML = `<tr><td colspan="11" class="loading">${watchlist.length?"条件に合う銘柄はありません":"右上の「銘柄リスト」から証券コードを追加してください"}</td></tr>`; return; }
+
+  const sigLabel = {drop:"下落", yield:"目標利回り", avg:"5年平均超", per:"PER", pbr:"PBR"};
+  tb.innerHTML = list.map(({w,d,c}) => {
+    if (!d) return `<tr><td class="l"><span class="dots muted">…</span></td><td class="l"><span class="code">${esc(w.code)}</span><span class="muted">取得中…</span></td><td colspan="9"></td></tr>`;
+    if (!c) return `<tr><td class="l">—</td><td class="l"><span class="code">${esc(w.code)}</span><span class="err">${esc(d.error||"取得できません")}</span></td><td colspan="9"></td></tr>`;
+    const cur = d.currency;
+    const chg = d.prevClose ? (d.price/d.prevClose-1)*100 : null;
+    const dots = c.keys.map(k => `<span class="dot ${c.sig[k]?"on":""}" title="${sigLabel[k]}">●</span>`).join("");
+    const pill = (ok, txt) => ok ? `<span class="ok">${txt}</span>` : `<span class="ng">${txt}</span>`;
+    const isOpen = open.has(w.code);
+    const main = `<tr class="main ${c.hit?"hit":""}" data-code="${esc(w.code)}">
+      <td class="l"><span class="dots">${dots}</span><span class="score">${c.score}/${c.keys.length}</span>${c.hit?' <span class="pill hit">割安候補</span>':""}</td>
+      <td class="l"><span class="code">${esc(d.code)}</span><span class="nm">${esc(d.name)}</span>
+        ${d.stale?'<span class="pill stale" title="'+esc(d.error||"")+'">前回値</span>':""}<br>
+        <span class="meta">${esc(d.sector||"")}${w.memo?" ・ "+esc(w.memo):""}</span></td>
+      <td data-label="株価">${fmtP(d.price,cur)}<br><span class="meta ${chg>0?"up":chg<0?"down":""}">${chg==null?"":(chg>0?"+":"")+chg.toFixed(2)+"%"}</span></td>
+      <td data-label="高値から">${pill(c.sig.drop, c.drop==null?"—":"−"+c.drop.toFixed(1)+"%")}<br><span class="meta">${PERIOD_LABEL[S.dropPeriod]}高値 ${fmtP(c.high,cur)}</span></td>
+      <td data-label="予想利回り">${pill(c.sig.yield, c.yld==null?"—":c.yld.toFixed(2)+"%")}<br><span class="meta">配当 ${d.fwdDiv??"—"}</span></td>
+      <td data-label="5年平均">${pill(c.sig.avg, d.avg5Yield==null?"—":d.avg5Yield.toFixed(2)+"%")}<br><span class="meta">${c.avgGap==null?"":(c.avgGap>=0?"+":"")+c.avgGap.toFixed(2)+"pt"}</span></td>
+      <td data-label="PER">${pill(c.sig.per, f1(c.perV))}</td>
+      <td data-label="PBR">${pill(c.sig.pbr, f2(d.pbr))}</td>
+      <td data-label="下落ライン">${distCell(c.dropLine, c.toDropLine, cur)}</td>
+      <td data-label="買いたい株価">${distCell(c.buyPrice, c.toBuy, cur)}</td>
+      <td class="l warn-cell">${c.warns.map(x=>`<span class="pill warn">⚠ ${esc(x)}</span>`).join("")}${d.streak?`<br><span class="meta">非減配 ${d.streak}年</span>`:""}</td>
+    </tr>`;
+    return main + (isOpen ? detailRow(w, d, c) : "");
+  }).join("");
+
+  tb.querySelectorAll("tr.main").forEach(tr => tr.onclick = e => {
+    const code = tr.dataset.code;
+    open.has(code) ? open.delete(code) : open.add(code);
+    render();
+  });
+  tb.querySelectorAll(".memo-in").forEach(inp => {
+    inp.onclick = e => e.stopPropagation();
+    inp.onchange = async () => {
+      const w = watchlist.find(x => x.code === inp.dataset.code);
+      if (w){ w.memo = inp.value; await saveWatchlist(); render(); }
+    };
+  });
+  tb.querySelectorAll(".btn-reload").forEach(b => b.onclick = e => { e.stopPropagation(); fetchOne(b.dataset.code, true); });
+}
+
+function detailRow(w, d, c){
+  const cur = d.currency;
+  const jp = d.jp;
+  const links = jp ? `
+      <a href="https://irbank.net/${d.code}" target="_blank" rel="noopener">IR BANK（業績）</a>
+      <a href="https://finance.yahoo.co.jp/quote/${d.code}.T/chart" target="_blank" rel="noopener">Yahoo!ファイナンス</a>
+      <a href="https://kabutan.jp/stock/?code=${d.code}" target="_blank" rel="noopener">株探</a>`
+    : `<a href="https://finance.yahoo.com/quote/${encodeURIComponent(d.ticker)}" target="_blank" rel="noopener">Yahoo Finance</a>`;
+  const divs = (d.divYears||[]).map(y => `${y.year}: ${y.div}`).join(" ／ ") || "データなし";
+  return `<tr class="detail"><td colspan="11">
+    <div class="detail-grid">
+      <div>${chartSVG(d, c)}
+        <div class="legend">
+          <span><i style="border-color:var(--accent)"></i>終値（5年）</span>
+          <span><i style="border-color:var(--muted);border-top-style:dashed"></i>${PERIOD_LABEL[S.dropPeriod]}高値</span>
+          <span><i style="border-color:var(--warn);border-top-style:dashed"></i>下落ライン（−${S.dropPct}%）</span>
+          <span><i style="border-color:var(--good);border-top-style:dashed"></i>買いたい株価（利回り${(+S.targetYield).toFixed(1)}%）</span>
+        </div>
+      </div>
+      <div>
+        <div><b>${esc(d.name)}</b> <span class="meta">${esc(d.industry||"")}</span></div>
+        <div class="meta" style="margin-top:6px;line-height:1.9">
+          ${PERIOD_LABEL[S.dropPeriod]}高値：${fmtP(c.high,cur)}（${esc(c.highDate||"")}）<br>
+          52週 高値／安値：${fmtP(d.high52,cur)} ／ ${fmtP(d.low52,cur)}<br>
+          予想配当：${d.fwdDiv??"—"} ／ 直近12ヶ月実績：${d.ttmDiv??"—"}<br>
+          配当性向：${d.payout==null?"—":d.payout+"%"} ／ 実績PER ${f1(d.per)} ／ 予想PER ${f1(d.fper)}<br>
+          年間配当の推移：${esc(divs)}<br>
+          データ取得：${esc(d.fetchedAt||"")} ${STATIC ? "" : `<button class="small btn-reload" data-code="${esc(w.code)}">この銘柄を再取得</button>`}
+        </div>
+        ${STATIC ? (w.memo ? `<div class="meta">メモ：${esc(w.memo)}</div>` : "") : `<input class="memo-in" data-code="${esc(w.code)}" value="${esc(w.memo||"")}" placeholder="メモ（例：NISA枠で検討、決算後に再確認）">`}
+        <div class="links" style="margin-top:8px">${links}</div>
+      </div>
+    </div>
+  </td></tr>`;
+}
+
+function chartSVG(d, c){
+  const ser = d.series || [];
+  if (ser.length < 2) return '<div class="muted">チャートデータなし</div>';
+  // 週次に間引き
+  const pts = ser.filter((_, i) => i % 5 === 0 || i === ser.length - 1);
+  const W = 720, H = 240, pl = 52, pr = 10, pt = 10, pb = 22;
+  const vals = pts.map(p => p[1]).concat([c.high, c.dropLine, c.buyPrice].filter(v => v != null && isFinite(v)));
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = (hi - lo) * 0.06 || 1; lo -= pad; hi += pad;
+  const x = i => pl + (W - pl - pr) * i / (pts.length - 1);
+  const y = v => pt + (H - pt - pb) * (1 - (v - lo) / (hi - lo));
+  const path = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join("");
+  const hline = (v, color, label) => v == null ? "" :
+    `<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="${color}" stroke-dasharray="5 4" stroke-width="1.3"/>
+     <text x="${W-pr-4}" y="${y(v)-4}" text-anchor="end" font-size="11" fill="${color}">${label} ${fmtP(v, d.currency)}</text>`;
+  const ticks = [];
+  for (let k = 0; k <= 4; k++){ const v = lo + (hi-lo)*k/4; ticks.push(`<text x="${pl-6}" y="${y(v)+4}" text-anchor="end" font-size="10" fill="var(--muted)">${fmtP(v, d.currency)}</text><line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/>`); }
+  const years = [];
+  let lastY = "";
+  pts.forEach((p, i) => { const yr = p[0].slice(0,4); if (yr !== lastY){ lastY = yr; if (i>0) years.push(`<text x="${x(i)}" y="${H-6}" font-size="10" fill="var(--muted)" text-anchor="middle">${yr}</text>`); } });
+  // 基準期間の開始位置
+  const n = +S.dropPeriod;
+  const startIdx = Math.max(0, ser.length - n);
+  const sx = pl + (W - pl - pr) * startIdx / (ser.length - 1);
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="5年チャート">
+    <rect x="${sx}" y="${pt}" width="${W-pr-sx}" height="${H-pt-pb}" fill="var(--accent-soft)" opacity=".5"/>
+    ${ticks.join("")}${years.join("")}
+    <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="1.8"/>
+    ${hline(c.high, "var(--muted)", "高値")}
+    ${hline(c.dropLine, "var(--warn)", "下落ライン")}
+    ${hline(c.buyPrice, "var(--good)", "買いたい株価")}
+  </svg>`;
+}
+
+// ===================== 書き出し・読み込み =====================
+$("btnExport").onclick = () => {
+  const blob = new Blob([JSON.stringify(watchlist, null, 1)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "watchlist.json"; a.click();
+};
+$("btnImport").onclick = () => $("fileImport").click();
+$("fileImport").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const arr = JSON.parse(await f.text());
+    if (!Array.isArray(arr)) throw 0;
+    const before = new Set(watchlist.map(w=>w.code));
+    arr.forEach(it => { const code = String(it.code||it).toUpperCase(); if (!before.has(code)) watchlist.push({code, memo: it.memo||""}); });
+    await saveWatchlist(); render();
+    await fetchAll(watchlist.filter(w=>!data[w.code]).map(w=>w.code));
+  } catch(_) { alert("読み込めませんでした（watchlist.json 形式のファイルを選んでください）"); }
+  e.target.value = "";
+};
+
+$("btnAdd").onclick = addCodes;
+$("addCode").onkeydown = e => { if (e.key === "Enter") addCodes(); };
+$("btnRefresh").onclick = () => STATIC ? loadStatic() : fetchAll(watchlist.map(w=>w.code), true);
+
+// ===================== 公開版（data.json を読むだけ） =====================
+async function loadStatic(){
+  const r = await fetch("data.json?t=" + Date.now(), {cache:"no-store"});
+  if (!r.ok) throw new Error("data.json が見つかりません");
+  const j = await r.json();
+  watchlist = j.watchlist || [];
+  Object.keys(data).forEach(k => delete data[k]);
+  Object.assign(data, j.stocks || {});
+  generatedAt = j.generatedAt || "";
+  $("updated").textContent = "データ更新: " + generatedAt;
+  renderTags(); render();
+}
+function enterStaticMode(){
+  STATIC = true;
+  document.body.classList.add("static");
+  $("btnRefresh").textContent = "再読み込み";
+  $("wlHint").textContent = "閲覧専用です。銘柄の追加・削除は Mac 版で行い、公開先の watchlist.json を更新してください。";
+}
+
+// ===================== 起動 =====================
+(async () => {
+  bindSettings();
+  changed();
+  let hasServer = false;
+  try {
+    const r = await fetch("/api/health", {cache:"no-store"});
+    hasServer = r.ok && (await r.json()).ok === true;
+  } catch(_) {}
+  if (hasServer) {
+    await loadWatchlist();
+    render();
+    await fetchAll(watchlist.map(w=>w.code));
+  } else {
+    enterStaticMode();
+    try { await loadStatic(); }
+    catch(e){ $("tbody").innerHTML = `<tr><td colspan="11" class="loading">${esc(e.message)}</td></tr>`; }
+  }
+})();
+</script>
+</body>
+</html>
