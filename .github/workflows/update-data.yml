@@ -2,8 +2,12 @@ name: Update data and deploy Pages
 
 on:
   schedule:
-    # 平日 16:30 JST = 07:30 UTC (Mon-Fri)
-    - cron: '30 7 * * 1-5'
+    # 平日 09:30 JST (前場開始30分後) = 00:30 UTC (Mon-Fri)
+    - cron: '30 0 * * 1-5'
+    # 平日 12:30 JST (後場開始) = 03:30 UTC (Mon-Fri)
+    - cron: '30 3 * * 1-5'
+    # 平日 15:30 JST (後場終了30分後) = 06:30 UTC (Mon-Fri)
+    - cron: '30 6 * * 1-5'
   workflow_dispatch:
 
 permissions:
@@ -37,7 +41,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data.json
-          git diff --cached --quiet || git commit -m "Update data.json (weekday 16:30 JST)"
+          git diff --cached --quiet || git commit -m "Update data.json (scheduled update)"
           git push
       - name: Prepare Pages artifact (only index.html + data.json)
         run: |
