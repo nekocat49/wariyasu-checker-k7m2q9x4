@@ -172,7 +172,10 @@ def fetch_stock(code: str) -> dict:
     # 5年平均利回り：過去5年の各月末株価 ÷ その時点の直近12ヶ月配当 の平均
     monthly = hist["Close"].copy()
     monthly.index = idx
-    monthly = monthly.resample("M").last().dropna()
+    try:
+        monthly = monthly.resample("ME").last().dropna()
+    except ValueError:
+        monthly = monthly.resample("M").last().dropna()
     start5 = now - timedelta(days=365 * 5)
     yields = []
     for d, close in monthly.items():
