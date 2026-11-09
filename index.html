@@ -409,7 +409,8 @@ function calc(d){
   const score = keys.filter(k => sig[k]).length;
 
   const warns = [];
-  if (d.fwdDiv && d.ttmDiv && d.fwdDiv < d.ttmDiv * 0.98) warns.push("減配予想");
+  const base = d.lastDiv ?? d.ttmDiv;   // 前期実績（株探）→ なければ直近12ヶ月
+  if (d.fwdDiv && base && d.fwdDiv < base * 0.98) warns.push("減配予想");
   if (d.payout != null && d.payout >= 70) warns.push(`配当性向${Math.round(d.payout)}%`);
   if (!d.fwdDiv) warns.push("無配");
 
@@ -542,7 +543,7 @@ function detailRow(w, d, c){
         <div class="meta" style="margin-top:6px;line-height:1.9">
           ${PERIOD_LABEL[S.dropPeriod]}高値：${fmtP(c.high,cur)}（${esc(c.highDate||"")}）<br>
           52週 高値／安値：${fmtP(d.high52,cur)} ／ ${fmtP(d.low52,cur)}<br>
-          予想配当：${d.fwdDiv??"—"} ／ 直近12ヶ月実績：${d.ttmDiv??"—"}<br>
+          予想配当：${d.fwdDiv??"—"}（${esc(d.divSource||"")}） ／ 前期実績：${d.lastDiv??"—"} ／ 直近12ヶ月：${d.ttmDiv??"—"}<br>
           配当性向：${d.payout==null?"—":d.payout+"%"} ／ 実績PER ${f1(d.per)} ／ 予想PER ${f1(d.fper)}<br>
           年間配当の推移：${esc(divs)}<br>
           データ取得：${esc(d.fetchedAt||"")} ${STATIC ? "" : `<button class="small btn-reload" data-code="${esc(w.code)}">この銘柄を再取得</button>`}
