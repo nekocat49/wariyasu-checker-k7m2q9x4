@@ -101,21 +101,76 @@ def _fetch_html(url, timeout=6):
         return r.read().decode("utf-8", errors="replace")
 
 
-def japanese_name(code):
-    tries = [
-        (f"https://finance.yahoo.co.jp/quote/{code}.T", [r"<title>([^(（|｜\-【]+)[（(|｜\-【]"]),
-        (f"https://kabutan.jp/stock/?code={code}", [r"<title>([^(\[（【]+)[(\[（【]"]),
-    ]
-    for url, pats in tries:
-        try:
-            html = _fetch_html(url)
-            for p in pats:
-                m = re.search(p, html)
-                if m and len(m.group(1).strip()) >= 2:
-                    return m.group(1).strip()
-        except Exception:
-            pass
-    return None
+def _num(s):
+    """'1,234.5' → 1234.5 / '－' などは None"""
+    s = re.sub(r"<[^>]+>|&nbsp;|,|\s", "", s or "")
+    try:
+        return float(s)
+    except Exception:
+        return None
+
+
+def kabutan_info(code):
+    """
+    株探から日本株の「会社予想ベース」の指標を取る。
+      - 銘柄名・PER（予想）・PBR・配当利回り（会社予想）… 基本情報ページ
+      - 予想1株配当・予想EPS・前期の実績1株配当 … 業績ページの通期表
+    Yahoo(米国版)の dividendRate は「直近1回の配当 × 回数」で、
+    中間と期末の金額が違う銘柄だと大きくずれるため、こちらを優先する。
+    """
+    out = {}
+    try:
+        html = _fetch_html(f"https://kabutan.jp/stock/?code={code}", timeout=10)
+        m = re.search(r"<title>([^(\[（【]+)[(\[（【]", html)
+        if m and len(m.group(1).strip()) >= 2:
+            out["name"] = m.group(1).strip()
+        # PER / PBR / 利回り / 信用倍率 の並び
+        m = re.search(r'id="stockinfo_i3".*?<tbody>\s*<tr>(.*?)</tr>', html, re.S)
+        if m:
+            tds = [re.sub(r"<span.*", "", td, flags=re.S) for td in re.findall(r"<td[^>]*>(.*?)</td>", m.group(1), re.S)]
+            if len(tds) >= 3:
+                out["kPer"], out["kPbr"], out["kYield"] = _num(tds[0]), _num(tds[1]), _num(tds[2])
+    except Exception:
+        pass
+    try:
+        html = _fetch_html(f"https://kabutan.jp/stock/finance?code={code}", timeout=10)
+        # 通期の業績表（「1株配」を含む最初の表）
+        i = html.find("1株配", html.find("fin_year_result_d"))
+        tbl = html[i:html.find("</table>", i)] if i > 0 else ""
+        actual = forecast = None
+        periods = []
+        for th, body in re.findall(r"<th scope=\"row\"[^>]*>(.*?)</th>(.*?)</tr>", tbl, re.S):
+            if not re.search(r"\d{4}\.\d{2}", th):
+                continue
+            tds = re.findall(r"<td[^>]*>(.*?)</td>", body, re.S)
+            if len(tds) < 6:
+                continue
+            row = {"period": re.search(r"\d{4}\.\d{2}", th).group(0),
+                   "eps": _num(tds[4]), "div": _num(tds[5])}
+            y, mo = map(int, row["period"].split("."))
+            periods.append(y * 12 + mo)
+            if "予" in th:
+                forecast = forecast or row
+            else:
+                actual = row
+        # REIT など決算が半年ごとの銘柄は、1期分の分配金を年換算（×2）する
+        if len(periods) >= 3 and all(b - a == 6 for a, b in zip(periods[-3:], periods[-2:])):
+            for r in (forecast, actual):
+                if r:
+                    r["div"] = r["div"] * 2 if r["div"] is not None else None
+                    r["eps"] = r["eps"] * 2 if r["eps"] is not None else None
+            out["semiannual"] = True
+        if forecast:
+            out["fcPeriod"] = forecast["period"]
+            out["fcDiv"] = forecast["div"]
+            out["fcEps"] = forecast["eps"]
+        if actual:
+            out["lastPeriod"] = actual["period"]
+            out["lastDiv"] = actual["div"]
+            out["lastEps"] = actual["eps"]
+    except Exception:
+        pass
+    return out
 
 
 # -----------------------------------------------
@@ -166,8 +221,17 @@ def fetch_stock(code: str) -> dict:
     now = datetime.now()
     ttm_div = sum(v for d, v in div_list if d > now - timedelta(days=365))
 
-    # 予想配当：yfinance の dividendRate（会社予想ベース）→ なければ直近12ヶ月実績
-    fwd_div = fnum(info.get("dividendRate")) or fnum(info.get("trailingAnnualDividendRate")) or (ttm_div or None)
+    # 予想配当
+    #   日本株：株探の会社予想（今期の予想1株配当）を使う
+    #   それ以外／取れないとき：Yahoo の dividendRate（直近1回×回数の概算）→ 直近12ヶ月実績
+    kb = kabutan_info(code) if is_jp(code) else {}
+    if kb.get("fcDiv") is not None:
+        fwd_div, div_source = kb["fcDiv"], f"会社予想（{kb.get('fcPeriod', '')}期）"
+    elif kb.get("lastDiv") is not None:
+        fwd_div, div_source = kb["lastDiv"], f"前期実績（{kb.get('lastPeriod', '')}期・今期予想なし）"
+    else:
+        fwd_div = fnum(info.get("dividendRate")) or fnum(info.get("trailingAnnualDividendRate")) or (ttm_div or None)
+        div_source = "Yahoo概算"
 
     # 5年平均利回り：過去5年の各月末株価 ÷ その時点の直近12ヶ月配当 の平均
     monthly = hist["Close"].copy()
@@ -208,16 +272,22 @@ def fetch_stock(code: str) -> dict:
     series = [[d.strftime("%Y-%m-%d"), round(float(c), 2), round(float(hh), 2)]
               for d, c, hh in zip(i5, h5["Close"].values, h5["High"].values)]
 
-    name = None
-    if is_jp(code):
-        name = japanese_name(code)
-    name = unicodedata.normalize("NFKC", name or info.get("shortName") or info.get("longName") or code)
+    name = unicodedata.normalize("NFKC", kb.get("name") or info.get("shortName") or info.get("longName") or code)
 
     sector_en = info.get("sector") or ""
-    pbr = fnum(info.get("priceToBook"), 2)
+    pbr = kb.get("kPbr") or fnum(info.get("priceToBook"), 2)
     bps = fnum(info.get("bookValue"))
     if pbr is None and bps and price:
         pbr = round(price / bps, 2)
+
+    # PER：実績＝前期EPS、予想＝今期予想EPS（株探）。取れなければ Yahoo
+    per = round(price / kb["lastEps"], 1) if kb.get("lastEps") and kb["lastEps"] > 0 and price else fnum(info.get("trailingPE"), 1)
+    fper = round(price / kb["fcEps"], 1) if kb.get("fcEps") and kb["fcEps"] > 0 and price else (kb.get("kPer") or fnum(info.get("forwardPE"), 1))
+    # 配当性向：予想配当 ÷ 予想EPS
+    if kb.get("fcDiv") is not None and kb.get("fcEps"):
+        payout = round(kb["fcDiv"] / kb["fcEps"] * 100, 1) if kb["fcEps"] > 0 else None
+    else:
+        payout = fnum(info.get("payoutRatio") * 100, 1) if fnum(info.get("payoutRatio")) is not None else None
 
     return {
         "code": code.upper(),
@@ -230,12 +300,15 @@ def fetch_stock(code: str) -> dict:
         "price": price,
         "prevClose": prev,
         "fwdDiv": fnum(fwd_div, 2),
+        "divSource": div_source,
+        "lastDiv": kb.get("lastDiv"),
+        "kYield": kb.get("kYield"),
         "ttmDiv": round(ttm_div, 2) if ttm_div else None,
         "avg5Yield": avg5,
-        "per": fnum(info.get("trailingPE"), 1),
-        "fper": fnum(info.get("forwardPE"), 1),
+        "per": per,
+        "fper": fper,
         "pbr": pbr,
-        "payout": fnum(info.get("payoutRatio") * 100, 1) if fnum(info.get("payoutRatio")) is not None else None,
+        "payout": payout,
         "high52": fnum(info.get("fiftyTwoWeekHigh")),
         "low52": fnum(info.get("fiftyTwoWeekLow")),
         "marketCap": fnum(info.get("marketCap")),
