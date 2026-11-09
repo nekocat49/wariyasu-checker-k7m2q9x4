@@ -110,6 +110,37 @@ def _num(s):
         return None
 
 
+def yahoo_jp_info(code):
+    """
+    Yahoo!ファイナンス（日本版）から銘柄名と会社予想の1株配当を取る。
+    株探が取得できない環境（GitHub Actions など海外IP）向けの代替。
+    昨日の実績では Yahoo!ファイナンスは Actions からも取得できた。
+    """
+    out = {}
+    try:
+        html = _fetch_html(f"https://finance.yahoo.co.jp/quote/{code}.T", timeout=10)
+        html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+        m = re.search(r"<title>(.*?)【", html)
+        if m:
+            nm = re.sub(r"[（(]株[)）]", "", m.group(1)).strip()
+            if len(nm) >= 2:
+                out["name"] = nm
+        m = re.search(r"1株配当</span><span[^>]*>（会社予想）</span>.*?"
+                      r"_StyledNumber__value[^\"]*\">([\d,\.]+)</span>", html, re.S)
+        if m:
+            out["fcDiv"] = _num(m.group(1))
+            mp = re.search(r"\((\d{4})/(\d{2})\)", html[m.end():m.end() + 300])
+            if mp:
+                out["fcPeriod"] = f"{mp.group(1)}.{mp.group(2)}"
+        m = re.search(r"配当利回り</span><span[^>]*>（会社予想）</span>.*?"
+                      r"_StyledNumber__value[^\"]*\">([\d,\.]+)</span>", html, re.S)
+        if m:
+            out["yjYield"] = _num(m.group(1))
+    except Exception:
+        pass
+    return out
+
+
 def kabutan_info(code):
     """
     株探から日本株の「会社予想ベース」の指標を取る。
@@ -225,8 +256,11 @@ def fetch_stock(code: str) -> dict:
     #   日本株：株探の会社予想（今期の予想1株配当）を使う
     #   それ以外／取れないとき：Yahoo の dividendRate（直近1回×回数の概算）→ 直近12ヶ月実績
     kb = kabutan_info(code) if is_jp(code) else {}
+    yj = yahoo_jp_info(code) if is_jp(code) and kb.get("fcDiv") is None else {}
     if kb.get("fcDiv") is not None:
         fwd_div, div_source = kb["fcDiv"], f"会社予想（{kb.get('fcPeriod', '')}期）"
+    elif yj.get("fcDiv") is not None:
+        fwd_div, div_source = yj["fcDiv"], f"会社予想（{yj.get('fcPeriod', '')}期・Yahoo!ファイナンス）"
     elif kb.get("lastDiv") is not None:
         fwd_div, div_source = kb["lastDiv"], f"前期実績（{kb.get('lastPeriod', '')}期・今期予想なし）"
     else:
@@ -272,7 +306,7 @@ def fetch_stock(code: str) -> dict:
     series = [[d.strftime("%Y-%m-%d"), round(float(c), 2), round(float(hh), 2)]
               for d, c, hh in zip(i5, h5["Close"].values, h5["High"].values)]
 
-    name = unicodedata.normalize("NFKC", kb.get("name") or info.get("shortName") or info.get("longName") or code)
+    name = unicodedata.normalize("NFKC", kb.get("name") or yj.get("name") or info.get("shortName") or info.get("longName") or code)
 
     sector_en = info.get("sector") or ""
     pbr = kb.get("kPbr") or fnum(info.get("priceToBook"), 2)
@@ -302,7 +336,7 @@ def fetch_stock(code: str) -> dict:
         "fwdDiv": fnum(fwd_div, 2),
         "divSource": div_source,
         "lastDiv": kb.get("lastDiv"),
-        "kYield": kb.get("kYield"),
+        "kYield": kb.get("kYield") or yj.get("yjYield"),
         "ttmDiv": round(ttm_div, 2) if ttm_div else None,
         "avg5Yield": avg5,
         "per": per,
